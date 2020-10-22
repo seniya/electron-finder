@@ -1,49 +1,8 @@
-'use strict'
-
-import { app, protocol, BrowserWindow } from 'electron'
+import { app, protocol, BrowserWindow, ipcMain } from 'electron'
 import { createProtocol } from 'vue-cli-plugin-electron-builder/lib'
 import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
 
-import walkFolders from './util/walkFolders'
-import getWindowsDrives from './util/getWindowsDrives'
-
-const fs = require('fs')
-const path = require('path')
-
-console.log(walkFolders)
-console.log(getWindowsDrives)
-
-const platform = 'win32'
-// const drive = 'C:'
-let drives_ = []
-
-function getWindowsDrives_ () {
-  getWindowsDrives(platform, (error, drives) => {
-    console.log('drives : ', drives)
-    if (!error) {
-      drives_ = drives
-      // work through the drives backwards
-      for (let index = drives_.length - 1; index >= 0; --index) {
-        try {
-          const stat = fs.statSync(drives_[index] + path.sep)
-          const fileInfo = {}
-          fileInfo.rootDir = drives_[index]
-          fileInfo.fileName = path.sep
-          fileInfo.isDir = stat.isDirectory()
-          fileInfo.stat = stat
-        } catch (error) {
-          // remove from (bad/phantom) drive list
-          drives_.splice(index, 1)
-          console.error(error)
-        }
-      }
-    }
-  })
-}
-
-getWindowsDrives_()
-
-console.log('drives_ : ', drives_)
+import IpcRegister from './electron/IpcRegister'
 
 const isDevelopment = process.env.NODE_ENV !== 'production'
 
@@ -53,7 +12,7 @@ let win
 
 // Scheme must be registered before the app is ready
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'app', privileges: { secure: true, standard: true } }
+  { scheme: 'app', privileges: { secure: false, standard: true } }
 ])
 
 function createWindow () {
@@ -131,3 +90,8 @@ if (isDevelopment) {
     })
   }
 }
+
+const ipcRegister = new IpcRegister(ipcMain)
+ipcRegister.registerOn()
+
+console.log('ddssssss')
