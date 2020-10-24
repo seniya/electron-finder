@@ -1,6 +1,8 @@
 <template>
-  <v-app>
-    <v-main>
+  <!--<mainComponent></mainComponent> -->
+  <!-- -->
+  <v-app style="height: 100%; min-height: 100%;">
+    <v-main  style="height: 100%; min-height: 100%;">
       <mainComponent></mainComponent>
     </v-main>
   </v-app>
@@ -24,9 +26,6 @@ export default {
   },
 
   data: () => ({
-    platform: 'win32',
-    drive: 'C:',
-    drives: []
   }),
 
   mounted () {
@@ -65,3 +64,10 @@ export default {
   }
 }
 </script>
+
+<style>
+html, body {
+  height: 100%;
+  min-height: 100%;
+}
+</style>

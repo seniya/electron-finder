@@ -94,4 +94,4 @@ if (isDevelopment) {
 const ipcRegister = new IpcRegister(ipcMain)
 ipcRegister.registerOn()
 
-console.log('ddssssss')
+console.log('d')

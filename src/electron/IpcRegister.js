@@ -83,6 +83,8 @@ class IpcRegister {
     const mimeType = mime.lookup(nodeKey)
     // create object
     return {
+      id: nodeKey,
+      name: fileInfo.fileName,
       label: fileInfo.fileName,
       nodeKey: nodeKey,
       expandable: fileInfo.isDir,
