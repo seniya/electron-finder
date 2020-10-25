@@ -1,75 +1,64 @@
 <template>
-  <v-container style="height: 100%; min-height: 100%;" >
-    <v-row class="main-wrapper">
-      <v-col cols="3" >
-        <div ref="foldersBox" class="list-box folders-box">
-          <v-treeview
-            :items="myPc"
-            activatable
-            color="warning"
-            dense
-            rounded
-            :load-children="onSelectedFolder"
-            :active.sync="active"
-            :open.sync="open"
-            @update:active="onUpdateActiveFolder">
-              <template v-slot:prepend="{ item, open }">
-                <v-icon v-if="item.nodeKey === 'ROOT'" medium color="blue darken-3">
-                  mdi-desktop-classic
-                </v-icon>
-                <v-icon v-else medium color="blue darken-3">
-                  {{open ? 'mdi-folder-open' : 'mdi-folder'}}
-                </v-icon>
-              </template>
-              <template v-slot:label="{ item }">
-                <span class="folder-label-text">{{item.label}}</span>
-              </template>
-            </v-treeview>
-        </div>
-      </v-col>
-      <v-col cols="9" >
-        <div ref="filesBox" class="list-box files-box">
+  <div ref="mainWrapper" class="main-wrapper" @mousemove="onHandleColumsMove" @mouseup="onHandleColumsUp">
+    <div ref="foldersBox" class="list-box folders-box">
+      <v-treeview
+        :items="myPc"
+        activatable
+        color="warning"
+        dense
+        rounded
+        :load-children="onSelectedFolder"
+        :active.sync="active"
+        :open.sync="open"
+        @update:active="onUpdateActiveFolder">
+          <template v-slot:prepend="{ item, open }">
+            <v-icon v-if="item.nodeKey === 'ROOT'" medium color="blue darken-3">
+              mdi-desktop-classic
+            </v-icon>
+            <v-icon v-else medium color="blue darken-3">
+              {{open ? 'mdi-folder-open' : 'mdi-folder'}}
+            </v-icon>
+          </template>
+          <template v-slot:label="{ item }">
+            <span class="folder-label-text">{{item.label}}</span>
+          </template>
+        </v-treeview>
 
-      <!--
-      <div v-for="item in contents" :key="item.label">
-        <span>{{item.label}}</span>
-        </div>-->
-        <!-- --><table class="file-box-table">
-          <thead>
-            <th class="th-1">이름</th>
-            <th class="th-2">유형</th>
-            <th class="th-3">수정된날짜</th>
-            <th class="th-4">크기</th>
-          </thead>
+    </div>
+    <div ref="listBoxHandler" class="list-box-handler" @mousedown="onHandleColumsDown"></div>
+    <div ref="filesBox" class="list-box files-box">
+      <v-data-table
+        :headers="headers"
+        :items="contents"
+        hide-default-footer
+        :items-per-page="contents.length"
+        item-key="nodeKey"
+        class="elevation-1">
+        <template v-slot:body="{ items }">
           <tbody>
-            <tr v-for="item in contents" :key="item.label">
-              <td class="td-1">
+            <tr v-for="item in items" :key="item.label">
+              <td>
                 <v-icon medium left>{{getFileIcon(item.data)}}</v-icon>
-                <span style="overflow:hidden;">{{item.label}}</span>
+                <span>{{item.label}}</span>
               </td>
-              <td class="td-2">
+              <td>
                 <span v-if="!item.data.isDir">{{getFileType(item.label)}}</span>
                 <span v-else>폴더</span>
               </td>
-              <td class="td-3">
-                <span>{{getFileTime(item.data.stat.birthtimeMs)}}</span>
+              <td>
+                <span>
+                  {{getFileTime(item.data.stat.birthtimeMs)}}
+                </span>
               </td>
-              <td class="td-4">
+              <td>
                 <span v-if="!item.data.isDir">{{getFileSizeIEC(item.data.stat.size)}}</span>
               </td>
             </tr>
           </tbody>
-        </table>
-
+        </template>
+      </v-data-table>
     </div>
-      </v-col>
-    </v-row>
-  </v-container>
-  <!-- <div ref="mainWrapper" class="main-wrapper" @mousemove="onHandleColumsMove" @mouseup="onHandleColumsUp">
-
-    <div ref="listBoxHandler" class="list-box-handler" @mousedown="onHandleColumsDown"></div>
-
-  </div> -->
+  </div>
 </template>
 
 <script>
@@ -380,9 +369,7 @@ export default {
       return mimeType.split('.').pop()
     },
     getFileTime (time) {
-      // console.log('time : ', time)
-      const returnValue = moment(time).format('YYYY-MM-DD HH:mm')
-      return returnValue
+      return moment(this.time).format('YYYY-MM-DD HH:mm')
     }
   }
 }
@@ -393,7 +380,7 @@ export default {
 .main-wrapper {
   position: relative;
   /* Use flexbox */
-  // display: flex;
+  display: flex;
   height: 100%;
   min-height: 100%;
 
@@ -409,11 +396,12 @@ export default {
     position: relative;
     height: 100%;
     min-height: 100%;
+    color: #fff;
     border-radius: 5px;
     padding: 20px;
     font-size: 150%;
     box-sizing: border-box;
-    // flex: 1 1 auto;
+    flex: 1 1 auto;
 
     .list-box-handler::before {
       content: '';
@@ -431,52 +419,6 @@ export default {
 
   .files-box {
     overflow: scroll;
-
-    .file-box-table {
-
-      font-size: 0.9rem;
-      width: 100%;
-      border-top: 1px solid #ccc;
-
-      th {
-        text-align: left;
-        padding: 5px;
-      }
-      .th-1 {
-        border-right: 1px solid #ccc;
-      }
-      .th-2 {
-        min-width: 60px;
-        border-right: 1px solid #ccc;
-      }
-      .th-3 {
-        min-width: 130px;
-        border-right: 1px solid #ccc;
-      }
-      .th-4 {
-        min-width: 100px;
-      }
-      td {
-        padding-left: 5px;
-        padding-right: 5px;
-        padding-bottom: 5px;
-      }
-
-      .td-1 {
-        white-space:nowrap;
-        overflow:hidden;
-        text-overflow:ellipsis;
-      }
-      .td-2 {
-
-      }
-      .td-3 {
-
-      }
-      .td-4 {
-
-      }
-    }
   }
 
   .folder-label-text{
