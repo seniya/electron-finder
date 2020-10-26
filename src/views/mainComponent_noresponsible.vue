@@ -1,8 +1,8 @@
 <template>
-   <div ref="mainWrapper" class="main-wrapper" @mousemove="onHandleColumsMove" @mouseup="onHandleColumsUp" @mouseleave="onHandleColumsUp">
-    <div ref="foldersBox" class="folders-box">
-      <div ref="foldersBoxWrap" class="ld-wrap" :style="styleLeftSidebarWidth">
-        <div ref="foldersBoxMain" class="ld-wrap-main" :style="styleLeftSidebarWidth">
+  <v-container style="height: 100%; min-height: 100%;" >
+    <v-row class="main-wrapper">
+      <v-col cols="3" >
+        <div ref="foldersBox" class="list-box folders-box">
           <v-treeview
             :items="myPc"
             activatable
@@ -13,39 +13,39 @@
             :active.sync="active"
             :open.sync="open"
             @update:active="onUpdateActiveFolder">
-            <template v-slot:prepend="{ item, open }">
-              <v-icon v-if="item.nodeKey === 'ROOT'" medium color="blue darken-3">
-                mdi-desktop-classic
-              </v-icon>
-              <v-icon v-else medium color="blue darken-3">
-                {{open ? 'mdi-folder-open' : 'mdi-folder'}}
-              </v-icon>
-            </template>
-            <template v-slot:label="{ item }">
-              <span class="folder-label-text">{{item.label}}</span>
-            </template>
-          </v-treeview>
+              <template v-slot:prepend="{ item, open }">
+                <v-icon v-if="item.nodeKey === 'ROOT'" medium color="blue darken-3">
+                  mdi-desktop-classic
+                </v-icon>
+                <v-icon v-else medium color="blue darken-3">
+                  {{open ? 'mdi-folder-open' : 'mdi-folder'}}
+                </v-icon>
+              </template>
+              <template v-slot:label="{ item }">
+                <span class="folder-label-text">{{item.label}}</span>
+              </template>
+            </v-treeview>
         </div>
-      </div>
+      </v-col>
+      <v-col cols="9" >
+        <div ref="filesBox" class="list-box files-box">
 
-    </div>
-    <div ref="listBoxHandler" class="list-box-handler" @mousedown="onHandleColumsDown"></div>
-    <div ref="filesBox" class="files-box" :style="styleRightSidebarWidth">
-      <div class="files-box-wrap" :style="styleRightSidebarWidth">
-        <table class="file-box-table">
+      <!--
+      <div v-for="item in contents" :key="item.label">
+        <span>{{item.label}}</span>
+        </div>-->
+        <!-- --><table class="file-box-table">
           <thead>
-            <!--  --><th class="th-1">이름</th>
+            <th class="th-1">이름</th>
             <th class="th-2">유형</th>
             <th class="th-3">수정된날짜</th>
             <th class="th-4">크기</th>
           </thead>
           <tbody>
             <tr v-for="item in contents" :key="item.label">
-              <!-- --><td class="td-1">
-                <div class="titleContent">
-                  <v-icon medium left>{{getFileIcon(item.data)}}</v-icon>
-                  {{item.label}}
-                </div>
+              <td class="td-1">
+                <v-icon medium left>{{getFileIcon(item.data)}}</v-icon>
+                <span style="overflow:hidden;">{{item.label}}</span>
               </td>
               <td class="td-2">
                 <span v-if="!item.data.isDir">{{getFileType(item.label)}}</span>
@@ -60,11 +60,16 @@
             </tr>
           </tbody>
         </table>
-      </div>
 
     </div>
+      </v-col>
+    </v-row>
+  </v-container>
+  <!-- <div ref="mainWrapper" class="main-wrapper" @mousemove="onHandleColumsMove" @mouseup="onHandleColumsUp">
 
-  </div>
+    <div ref="listBoxHandler" class="list-box-handler" @mousedown="onHandleColumsDown"></div>
+
+  </div> -->
 </template>
 
 <script>
@@ -119,11 +124,10 @@ function * walkFolders (folder, recurseLevel = 0) {
 export default {
   data () {
     return {
-      mainWrapper: null,
-      foldersBox: null,
-      listBoxHandler: null,
+      mainWrapper: this.$refs.mainWrapper,
+      foldersBox: this.$refs.foldersBox,
+      listBoxHandler: this.$refs.listBoxHandler,
       isHandlerDragging: false,
-      leftSidebarWidth: 450,
 
       myPc: [],
       displayItems: [],
@@ -180,13 +184,6 @@ export default {
         { text: '날짜', value: 'data.stat.birthtimeMs' },
         { text: '크기', value: 'data.stat.size' }
       ]
-    },
-    styleLeftSidebarWidth () {
-      return `width: ${this.leftSidebarWidth}px`
-    },
-    styleRightSidebarWidth () {
-      const width = this.mainWrapper === null ? '100' : this.mainWrapper.getBoundingClientRect().width - this.leftSidebarWidth - 40
-      return `width: ${width}px`
     }
   },
 
@@ -218,18 +215,14 @@ export default {
       var containerOffsetLeft = this.mainWrapper.offsetLeft
       var pointerRelativeXpos = e.clientX - containerOffsetLeft
       var boxAminWidth = 60
-      // const width = (Math.max(boxAminWidth, pointerRelativeXpos - 8)) + 'px'
-      // this.foldersBox.style.width = width
-      // this.foldersBox.style.flexGrow = 0
-
-      this.leftSidebarWidth = (Math.max(boxAminWidth, pointerRelativeXpos - 8) + 10)
+      const width = (Math.max(boxAminWidth, pointerRelativeXpos - 8)) + 'px'
+      this.foldersBox.style.width = width
+      this.foldersBox.style.flexGrow = 0
     },
     onHandleColumsInit () {
       this.mainWrapper = this.$refs.mainWrapper
       this.foldersBox = this.$refs.foldersBox
       this.listBoxHandler = this.$refs.listBoxHandler
-
-      console.log('onHandleColumsInit :', this.mainWrapper.getBoundingClientRect().width)
     },
 
     clearAllContentItems () {
@@ -370,10 +363,7 @@ export default {
       // const returnValue = `(${itemData.mimeType})`
       let vIco = ICON_TYPE[itemData.mimeType]
       if (itemData.isDir) vIco = 'mdi-folder'
-      if (vIco === undefined) {
-        vIco = 'mdi-file'
-        console.log(' getFileIcon undefined : ', itemData.mimeType)
-      }
+      if (vIco === undefined) vIco = 'mdi-file'
       // console.log(`mimeType: ${itemData.mimeType} / vIco: ${vIco}`)
       return vIco
     },
@@ -403,7 +393,7 @@ export default {
 .main-wrapper {
   position: relative;
   /* Use flexbox */
-  display: flex;
+  // display: flex;
   height: 100%;
   min-height: 100%;
 
@@ -414,7 +404,18 @@ export default {
     flex: 0 0 auto;
     background-color: #ccc;
   }
-  .list-box-handler::before {
+
+  .list-box {
+    position: relative;
+    height: 100%;
+    min-height: 100%;
+    border-radius: 5px;
+    padding: 20px;
+    font-size: 150%;
+    box-sizing: border-box;
+    // flex: 1 1 auto;
+
+    .list-box-handler::before {
       content: '';
       display: block;
       width: 5px;
@@ -422,28 +423,14 @@ export default {
       background: #999;
       margin: 0 auto;
     }
+  }
 
   .folders-box {
     overflow-y: scroll;
-    display: flex;
-    height: 100%;
-    min-height: 100%;
-    position: relative;
-    background-color: lawngreen;
   }
 
   .files-box {
-    padding: 10px;
     overflow: scroll;
-    flex-flow: row wrap;
-    height: 100%;
-    min-height: 100%;
-    width: 100%;
-    background-color: gray;
-
-    .files-box-wrap {
-
-    }
 
     .file-box-table {
 
@@ -479,11 +466,6 @@ export default {
         white-space:nowrap;
         overflow:hidden;
         text-overflow:ellipsis;
-        .titleContent {
-          white-space:nowrap;
-          overflow:hidden;
-          text-overflow:ellipsis;
-        }
       }
       .td-2 {
 
