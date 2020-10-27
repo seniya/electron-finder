@@ -31,21 +31,19 @@
     </div>
     <div ref="listBoxHandler" class="list-box-handler" @mousedown="onHandleColumsDown"></div>
     <div ref="filesBox" class="files-box" :style="styleRightSidebarWidth">
-      <div class="files-box-wrap" :style="styleRightSidebarWidth">
-        <table class="file-box-table">
+      <div class="files-box-wrap" >
+        <table class="file-box-table" :style="styleRightSidebarTableWidth">
           <thead>
-            <!--  --><th class="th-1">이름</th>
+            <!--  --><th class="th-1" :style="styleRightSidebarTableTh1Width">이름</th>
             <th class="th-2">유형</th>
             <th class="th-3">수정된날짜</th>
             <th class="th-4">크기</th>
           </thead>
           <tbody>
             <tr v-for="item in contents" :key="item.label">
-              <!-- --><td class="td-1">
-                <div class="titleContent">
-                  <v-icon medium left>{{getFileIcon(item.data)}}</v-icon>
+              <!-- --><td class="td-1" >
+                <!-- <v-icon medium left>{{getFileIcon(item.data)}}</v-icon> -->
                   {{item.label}}
-                </div>
               </td>
               <td class="td-2">
                 <span v-if="!item.data.isDir">{{getFileType(item.label)}}</span>
@@ -138,6 +136,7 @@ export default {
   destroyed () {
     console.log('destroyed 22')
     window.ipcRenderer.removeAllListeners()
+    window.removeEventListener('resize', this.onWindowResize)
   },
 
   created () {
@@ -161,6 +160,8 @@ export default {
       }]
       this.myPc = myPc
     })
+
+    window.addEventListener('resize', this.onWindowResize)
   },
 
   mounted () {
@@ -185,7 +186,15 @@ export default {
       return `width: ${this.leftSidebarWidth}px`
     },
     styleRightSidebarWidth () {
-      const width = this.mainWrapper === null ? '100' : this.mainWrapper.getBoundingClientRect().width - this.leftSidebarWidth - 40
+      const width = this.mainWrapper === null ? '100%' : this.mainWrapper.getBoundingClientRect().width - this.leftSidebarWidth - 30
+      return `width: ${width}px`
+    },
+    styleRightSidebarTableWidth () {
+      const width = this.mainWrapper === null ? '100%' : this.mainWrapper.getBoundingClientRect().width - this.leftSidebarWidth - 60
+      return `width: ${width}px`
+    },
+    styleRightSidebarTableTh1Width () {
+      const width = this.mainWrapper === null ? '100%' : this.mainWrapper.getBoundingClientRect().width - this.leftSidebarWidth - 60 - 290
       return `width: ${width}px`
     }
   },
@@ -228,8 +237,12 @@ export default {
       this.mainWrapper = this.$refs.mainWrapper
       this.foldersBox = this.$refs.foldersBox
       this.listBoxHandler = this.$refs.listBoxHandler
+    },
 
-      console.log('onHandleColumsInit :', this.mainWrapper.getBoundingClientRect().width)
+    onWindowResize () {
+      // console.log('onWindowResize :', this.mainWrapper.getBoundingClientRect().width)
+      this.$forceCompute('styleRightSidebarTableWidth')
+      this.$forceCompute('styleRightSidebarWidth')
     },
 
     clearAllContentItems () {
@@ -448,7 +461,7 @@ export default {
     .file-box-table {
 
       font-size: 0.9rem;
-      width: 100%;
+      // width: 100%;
       border-top: 1px solid #ccc;
 
       th {
@@ -459,26 +472,32 @@ export default {
         border-right: 1px solid #ccc;
       }
       .th-2 {
-        min-width: 60px;
+        width: 60px;
         border-right: 1px solid #ccc;
       }
       .th-3 {
-        min-width: 130px;
+        width: 130px;
         border-right: 1px solid #ccc;
       }
       .th-4 {
-        min-width: 100px;
+        // width: 100px;
       }
       td {
         padding-left: 5px;
         padding-right: 5px;
         padding-bottom: 5px;
-      }
 
-      .td-1 {
         white-space:nowrap;
         overflow:hidden;
         text-overflow:ellipsis;
+      }
+
+      .td-1 {
+        display: block;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+
         .titleContent {
           white-space:nowrap;
           overflow:hidden;
