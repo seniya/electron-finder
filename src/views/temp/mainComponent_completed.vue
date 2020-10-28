@@ -1,0 +1,496 @@
+<template>
+   <div ref="mainWrapper" class="main-wrapper" @mousemove="onHandleColumsMove" @mouseup="onHandleColumsUp" @mouseleave="onHandleColumsUp">
+
+    <div ref="foldersBox" class="folders-box">
+      <div ref="foldersBoxWrap" class="ld-wrap" :style="styleLeftSidebarWidth">
+        <div ref="foldersBoxMain" class="ld-wrap-main" :style="styleLeftSidebarWidth">
+          <v-treeview
+            :items="myPc"
+            activatable
+            color="warning"
+            dense
+            rounded
+            :load-children="onSelectedFolder"
+            :active.sync="active"
+            :open.sync="open"
+            @update:active="onUpdateActiveFolder">
+            <template v-slot:prepend="{ item, open }">
+              <v-icon v-if="item.nodeKey === 'ROOT'" medium color="blue darken-3">
+                mdi-desktop-classic
+              </v-icon>
+              <v-icon v-else medium color="blue darken-3">
+                {{open ? 'mdi-folder-open' : 'mdi-folder'}}
+              </v-icon>
+            </template>
+            <template v-slot:label="{ item }">
+              <span class="folder-label-text">{{item.label}}</span>
+            </template>
+          </v-treeview>
+        </div>
+      </div>
+    </div>
+
+    <div ref="listBoxHandler" class="list-box-handler" @mousedown="onHandleColumsDown"></div>
+
+    <div ref="filesBox" class="files-box" :style="styleRightSidebarWidth">
+      <div class="files-box-wrap" >
+        <table class="file-box-table" :style="styleRightSidebarTableWidth">
+          <thead>
+            <th class="th-1" :style="styleRightSidebarTableTh1Width">이름</th>
+            <th class="th-2">유형</th>
+            <th class="th-3">수정된날짜</th>
+            <th class="th-4">크기</th>
+          </thead>
+          <tbody>
+            <tr v-for="item in contents" :key="item.label">
+              <td class="td-1" >
+                <v-icon medium left>{{getFileIcon(item.data)}}</v-icon>
+                  {{item.label}}
+              </td>
+              <td class="td-2">
+                <span v-if="!item.data.isDir">{{getFileType(item.label)}}</span>
+                <span v-else>폴더</span>
+              </td>
+              <td class="td-3">
+                <span>{{getFileTime(item.data.stat.birthtimeMs)}}</span>
+              </td>
+              <td class="td-4">
+                <span v-if="!item.data.isDir">{{getFileSizeIEC(item.data.stat.size)}}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</template>
+
+<script>
+import { ipcRenderer } from 'electron'
+import ICON_TYPE from '@/util/iconType'
+import _ from 'lodash'
+import moment from 'moment'
+const path = require('path')
+const fs = require('fs')
+const mime = require('mime-types')
+console.log('path.sep : ', path.sep)
+
+window.ipcRenderer = ipcRenderer
+
+function * walkFolders (folder, recurseLevel = 0) {
+  try {
+    const files = fs.readdirSync(folder)
+    // console.log('walkFolders folder : ', folder)
+    // console.log('walkFolders files : ', files)
+
+    for (const file of files) {
+      try {
+        const pathToFile = path.join(folder, file)
+        const stat = fs.statSync(pathToFile)
+        const isDirectory = stat.isDirectory()
+        if (isDirectory && recurseLevel > 0) {
+          yield * walkFolders(pathToFile, recurseLevel - 1)
+        } else {
+          yield {
+            rootDir: folder,
+            fileName: file,
+            isDir: isDirectory,
+            stat: stat
+          }
+        }
+      } catch (err) {
+        yield {
+          rootDir: folder,
+          fileName: file,
+          error: err
+        }
+      }
+    }
+  } catch (err) {
+    yield {
+      rootDir: folder,
+      error: err
+    }
+  }
+}
+
+export default {
+  data () {
+    return {
+      mainWrapper: null,
+      foldersBox: null,
+      listBoxHandler: null,
+      isHandlerDragging: false,
+      leftSidebarWidth: 450,
+
+      myPc: [],
+      displayItems: [],
+      drives: [],
+      selectedFolder: null, // the selected node (label)
+      contents: [], // children of a node
+      active: [],
+      open: []
+    }
+  },
+
+  destroyed () {
+    // console.log('destroyed 22')
+    window.ipcRenderer.removeAllListeners()
+    window.removeEventListener('resize', this.onWindowResize)
+  },
+
+  created () {
+    // console.log('created')
+    window.ipcRenderer.send('req_system', 'request')
+    window.ipcRenderer.on('res_system', (event, res) => {
+      console.log('ipcRenderer on  s:', JSON.parse(res))
+      const items = JSON.parse(res)
+      const orderItems = _.orderBy(items, ['label'], ['asc'])
+      // console.log('orderItems : ', orderItems)
+
+      const myPc = [{
+        id: 'ROOT',
+        name: '내PC',
+        label: '내PC',
+        nodeKey: 'ROOT',
+        expandable: true,
+        tickable: true,
+        lazy: true,
+        children: orderItems
+      }]
+      this.myPc = myPc
+      this.drives = orderItems
+    })
+
+    window.addEventListener('resize', this.onWindowResize)
+  },
+
+  mounted () {
+    this.onHandleColumsInit()
+  },
+
+  computed: {
+    headers () {
+      return [
+        {
+          text: '이름',
+          align: 'start',
+          sortable: true,
+          value: 'label'
+        },
+        { text: '타입', value: 'data.mimeType' },
+        { text: '날짜', value: 'data.stat.birthtimeMs' },
+        { text: '크기', value: 'data.stat.size' }
+      ]
+    },
+    styleLeftSidebarWidth () {
+      return `width: ${this.leftSidebarWidth}px`
+    },
+    styleRightSidebarWidth () {
+      const width = this.mainWrapper === null ? '100%' : this.mainWrapper.getBoundingClientRect().width - this.leftSidebarWidth - 30
+      return `width: ${width}px`
+    },
+    styleRightSidebarTableWidth () {
+      const width = this.mainWrapper === null ? '100%' : this.mainWrapper.getBoundingClientRect().width - this.leftSidebarWidth - 60
+      return `width: ${width}px`
+    },
+    styleRightSidebarTableTh1Width () {
+      const width = this.mainWrapper === null ? '100%' : this.mainWrapper.getBoundingClientRect().width - this.leftSidebarWidth - 60 - 290
+      return `width: ${width}px`
+    }
+  },
+
+  methods: {
+    onHandleColumsDown (e) {
+      if (e.target === this.listBoxHandler) {
+        this.isHandlerDragging = true
+      }
+    },
+    onHandleColumsUp (e) {
+      this.isHandlerDragging = false
+    },
+    onHandleColumsMove (e) {
+      if (!this.isHandlerDragging) {
+        return false
+      }
+      var containerOffsetLeft = this.mainWrapper.offsetLeft
+      var pointerRelativeXpos = e.clientX - containerOffsetLeft
+      var boxAminWidth = 60
+
+      this.leftSidebarWidth = (Math.max(boxAminWidth, pointerRelativeXpos - 8) + 10)
+    },
+    onHandleColumsInit () {
+      this.mainWrapper = this.$refs.mainWrapper
+      this.foldersBox = this.$refs.foldersBox
+      this.listBoxHandler = this.$refs.listBoxHandler
+    },
+
+    onWindowResize () {
+      this.$forceCompute('styleRightSidebarTableWidth')
+      this.$forceCompute('styleRightSidebarWidth')
+    },
+
+    clearAllContentItems () {
+      this.contents.splice(0, this.contents.length)
+    },
+
+    onUpdateActiveFolder (items) {
+      console.log('onUpdateActiveFolder 시작 items[0] : ', items[0])
+      console.log('onUpdateActiveFolder 시작 this.selectedFolder : ', this.selectedFolder)
+      // if (items.length === 0 && this.selectedFolder !== null) {
+      //   if (this.selectedFolder !== undefined) {
+      //     this.active = [this.selectedFolder]
+      //   }
+      // }
+      if (this.selectedFolder !== this.active[0]) {
+        console.log('onUpdateActiveFolder 달라요 : ', items[0])
+
+        if (items.length > 0) {
+          if (items[0] === 'ROOT') {
+            console.log('루트폴더 입니다.')
+            this.clearAllContentItems()
+            this.contents.push(...this.drives)
+          } else {
+            this.selectedFolder = items[0] + path.sep
+            this.clearAllContentItems()
+            const newContents = this.getFolderContents(this.selectedFolder)
+            console.log('newContents : ', newContents)
+            this.contents.push(...newContents)
+          }
+        }
+      }
+      // console.log('onUpdateActiveFolder items : ', items)
+    },
+
+    onSelectedFolder (item) {
+      // console.log('onSelectedFolder item : ', item)
+      // console.log('onSelectedFolder active: ', this.active)
+      // console.log('onSelectedFolder open: ', this.open)
+      const absolutePath = item.nodeKey
+      this.setSelectedFolder(item, absolutePath)
+    },
+
+    onDbSelectedFolder (item) {
+      console.log('onDbSelectedFolder item : ', item)
+      // this.open.push(item.id)
+    },
+
+    setSelectedFolder (item, folder) {
+      // this.selectedFolder = folder
+      // if (process.platform === 'win32') {
+      //   if (this.selectedFolder.charAt(this.selectedFolder.length - 1) === ':') {
+      //     this.selectedFolder += path.sep
+      //   }
+      // }
+      folder += path.sep
+      this.getFolders(item, folder)
+    },
+    getFolders (node, key) {
+      try {
+        if (node.children.length) {
+          node.children.splice(0, node.children.length)
+        }
+
+        // const logs = walkFolders(key, 0)
+        // console.log('node : ', node)
+        // console.log('loadChildren key : ', key)
+
+        for (const fileInfo of walkFolders(key, 0)) {
+          // console.log('fileInfo : ', fileInfo)
+          /**/
+          if (!fileInfo.isDir) {
+            continue
+          }
+          const n = this.createNode(fileInfo)
+          node.children.push(n)
+        }
+        console.log('loadChildren node : ', _.cloneDeep(node))
+        return true
+      } catch (err) {
+        // usually access error
+        console.error('Error: ', err)
+      }
+      return false
+    },
+
+    getFolderContents (folder) {
+      console.log('getFolderContents folder : ', folder)
+      const contents = []
+
+      // check incoming arg
+      if (!folder || typeof folder !== 'string') {
+        return contents
+      }
+
+      let newFolders = []
+      let newFiles = []
+      for (const fileInfo of walkFolders(folder, 0)) {
+        // all files and folders
+        if ('error' in fileInfo) {
+          console.error(`Error: ${fileInfo.rootDir} - ${fileInfo.error}`)
+          continue
+        }
+        const node = this.createNode(fileInfo)
+        if (node.data.isDir) newFolders.push(node)
+        if (!node.data.isDir) newFiles.push(node)
+      }
+
+      newFolders = _.orderBy(newFolders, ['label'], ['asc'])
+      newFiles = _.orderBy(newFiles, ['label'], ['asc'])
+
+      contents.push(...newFolders, ...newFiles)
+      return contents
+    },
+
+    createNode (fileInfo) {
+      let nodeKey = fileInfo.rootDir
+      if (nodeKey.charAt(nodeKey.length - 1) !== path.sep) {
+        nodeKey += path.sep
+      }
+      if (fileInfo.fileName === path.sep) {
+        fileInfo.fileName = nodeKey
+      } else {
+        nodeKey += fileInfo.fileName
+      }
+      // get file mime type
+      const mimeType = mime.lookup(nodeKey)
+      // create object
+      return {
+        id: nodeKey,
+        name: fileInfo.fileName,
+        label: fileInfo.fileName,
+        nodeKey: nodeKey,
+        expandable: fileInfo.isDir,
+        tickable: true,
+        lazy: true,
+        children: [],
+        data: {
+          rootDir: fileInfo.rootDir,
+          isDir: fileInfo.isDir,
+          mimeType: mimeType,
+          stat: fileInfo.stat
+        }
+      }
+    },
+
+    getFileIcon (itemData) {
+      // const returnValue = `(${itemData.mimeType})`
+      let vIco = ICON_TYPE[itemData.mimeType]
+      if (itemData.isDir) vIco = 'mdi-folder'
+      if (vIco === undefined) {
+        vIco = 'mdi-file'
+        console.log(' getFileIcon undefined : ', itemData.mimeType)
+      }
+      // console.log(`mimeType: ${itemData.mimeType} / vIco: ${vIco}`)
+      return vIco
+    },
+
+    getFileSizeIEC (a, b, c, d, e) {
+      // console.log('fileSizeIEC a: ', a)
+      b = Math
+      c = b.log
+      d = 1024
+      e = c(a) / c(d) | 0
+      return (a / b.pow(d, e)).toFixed(2) + ' ' + (e ? 'kMGTPEZY'[--e] + 'B' : 'Bytes')
+    },
+    getFileType (mimeType) {
+      return mimeType.split('.').pop()
+    },
+    getFileTime (time) {
+      // console.log('time : ', time)
+      const returnValue = moment(time).format('YYYY-MM-DD HH:mm')
+      return returnValue
+    }
+  }
+}
+</script>
+
+<style lang="scss" scope>
+
+.main-wrapper {
+  position: relative;
+  /* Use flexbox */
+  display: flex;
+  height: 100%;
+  min-height: 100%;
+
+  .list-box-handler {
+    width: 5px;
+    padding: 0;
+    cursor: ew-resize;
+    flex: 0 0 auto;
+    background-color: #ccc;
+  }
+  .list-box-handler::before {
+      content: '';
+      display: block;
+      width: 5px;
+      height: 100%;
+      background: #999;
+      margin: 0 auto;
+    }
+
+  .folders-box {
+    overflow-y: scroll;
+    display: flex;
+    height: 100%;
+    min-height: 100%;
+    position: relative;
+    // background-color: lawngreen;
+  }
+
+  .files-box {
+    padding: 10px;
+    overflow: scroll;
+    flex-flow: row wrap;
+    height: 100%;
+    min-height: 100%;
+    width: 100%;
+    // background-color: gray;
+
+    .file-box-table {
+      font-size: 0.9rem;
+      // width: 100%;
+      border-top: 1px solid #ccc;
+
+      th {
+        text-align: left;
+        padding: 5px;
+      }
+      .th-1 {
+        border-right: 1px solid #ccc;
+      }
+      .th-2 {
+        width: 60px;
+        border-right: 1px solid #ccc;
+      }
+      .th-3 {
+        width: 130px;
+        border-right: 1px solid #ccc;
+      }
+      .th-4 {
+        // width: 100px;
+      }
+      td {
+        padding-left: 5px;
+        padding-right: 5px;
+        padding-bottom: 5px;
+
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+      }
+    }
+  }
+
+  .folder-label-text{
+    font-size: 0.9rem;
+  }
+
+  .v-treeview-node__root {
+    margin-top: 0px !important;
+    margin-bottom: 0px !important;
+  }
+}
+</style>

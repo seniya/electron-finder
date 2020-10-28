@@ -1,4 +1,4 @@
-const ICON_TYPE = {
+const constIconType = {
   'text/html': 'mdi-language-html5',
   'text/css': 'mdi-language-css3',
   'text/xml': 'mdi-xml',
@@ -82,4 +82,4 @@ const ICON_TYPE = {
   'video/x-matroska': 'mdi-file-video'
 }
 
-export default ICON_TYPE
+export default constIconType

@@ -9,17 +9,18 @@ const fs = require('fs')
  * @param {Number} recurseLevel - number of times to recurse folders
  * @returns {IterableIterator<String>}
  */
-function * walkFolders (folder, recurseLevel = 0) {
+function * fnWalkFolders (folder, recurseLevel = 0) {
   try {
     const files = fs.readdirSync(folder)
-
+    // console.log('walkFolders folder : ', folder)
+    // console.log('walkFolders files : ', files)
     for (const file of files) {
       try {
         const pathToFile = path.join(folder, file)
         const stat = fs.statSync(pathToFile)
         const isDirectory = stat.isDirectory()
         if (isDirectory && recurseLevel > 0) {
-          yield * walkFolders(pathToFile, recurseLevel - 1)
+          yield * fnWalkFolders(pathToFile, recurseLevel - 1)
         } else {
           yield {
             rootDir: folder,
@@ -44,4 +45,4 @@ function * walkFolders (folder, recurseLevel = 0) {
   }
 }
 
-export default walkFolders
+export default fnWalkFolders

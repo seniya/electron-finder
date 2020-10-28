@@ -1,9 +1,9 @@
-// import getWindowsDrives from './util/getWindowsDrives'
-const fs = require('fs')
+import fnGetDrives from '../util/fnGetDrives'
+import fnWalkFolders from '../util/fnWalkFolders'
+import fnCreateNode from '../util/fnCreateNode'
+import _ from 'lodash'
+
 const path = require('path')
-const util = require('util')
-const exec = util.promisify(require('child_process').exec)
-const mime = require('mime-types')
 
 class IpcRegister {
   constructor (ipcMain) {
@@ -14,132 +14,84 @@ class IpcRegister {
 
   registerOn () {
     this.ipcMain.on('req_system', async (event, res) => {
-      this.drives_ = []
-      this.fileInfos_ = []
-      console.log('ipcMain.on : ', res)
-      const fileInfos = await this.getWindowsDrives_()
-      event.sender.send('res_system', JSON.stringify(fileInfos))
+      console.log('ipcMain.on req_system : ')
+      const fileInfos = await fnGetDrives()
+      const orderItems = _.orderBy(fileInfos, ['label'], ['asc'])
+      // console.log('orderItems : ', orderItems)
+      const myPc = [{
+        id: 'ROOT',
+        name: '내PC',
+        label: '내PC',
+        nodeKey: 'ROOT',
+        expandable: true,
+        tickable: true,
+        lazy: true,
+        children: orderItems
+      }]
+      const pathSep = path.sep
+      const resObj = { myPc, orderItems, pathSep }
+
+      // event.sender.send('res_system', JSON.stringify(resObj))
+      event.returnValue = JSON.stringify(resObj)
+    })
+
+    this.ipcMain.on('req_folders', async (event, res) => {
+      console.log('ipcMain.on req_folders : ')
+      const resObj = await this.getFolders(res)
+      event.returnValue = JSON.stringify(resObj)
+    })
+
+    this.ipcMain.on('req_folderContents', async (event, res) => {
+      console.log('ipcMain.on req_folderContents : ')
+      const resObj = await this.getFolderContents(res)
+      event.returnValue = JSON.stringify(resObj)
     })
   }
 
-  async getWindowsDrives_ () {
+  getFolders (node) {
+    const key = node.nodeKey + path.sep
+    const folders = []
     try {
-      // eslint-disable-next-line no-unused-vars
-      const { stdout, stderr } = await exec('wmic LOGICALDISK LIST BRIEF')
-      // console.log('getWindowsDrives_ stdout : ', stdout)
-      // console.log('getWindowsDrives_ stderr : ', stderr === '')
-      const parts = stdout.split('\n')
-      if (parts.length) {
-        parts.splice(0, 1)
-        for (let index = 0; index < parts.length; ++index) {
-          const drive = parts[index].slice(0, 2)
-          if (drive.length && drive[drive.length - 1] === ':') {
-            try {
-            // if stat fails, it'll throw an exception
-              fs.statSync(drive + path.sep)
-              this.drives_.push(drive)
-            } catch (e) {
-              console.error(`Cannot stat windows drive: ${drive}`, e)
-            }
-          }
+      // if (node.children.length) {
+      //   node.children.splice(0, node.children.length)
+      // }
+      for (const fileInfo of fnWalkFolders(key, 0)) {
+        if (!fileInfo.isDir) {
+          continue
         }
-        // console.log('this.drives_ : ', this.drives_)
-        for (let index = this.drives_.length - 1; index >= 0; --index) {
-          try {
-            const stat = fs.statSync(this.drives_[index] + path.sep)
-            const fileInfo = {}
-            fileInfo.rootDir = this.drives_[index]
-            fileInfo.fileName = path.sep
-            fileInfo.isDir = stat.isDirectory()
-            fileInfo.stat = stat
-            // console.log('fileInfo : ', fileInfo)
-            const node = this.createNode(fileInfo)
-            this.fileInfos_.push(node)
-          } catch (error) {
-          // remove from (bad/phantom) drive list
-            this.drives_.splice(index, 1)
-            console.error(error)
-          }
-        }
-        return this.fileInfos_
+        const n = fnCreateNode(fileInfo)
+        folders.push(n)
+        // node.children.push(n)
       }
-    } catch (error) {
-      this.drive = []
-      console.error('getWindowsDrives_ s: ', error)
+      // console.log('loadChildren node : ', _.cloneDeep(node))
+      return folders
+    } catch (err) {
+      console.error('Error: ', err)
+      return []
     }
   }
 
-  createNode (fileInfo) {
-    let nodeKey = fileInfo.rootDir
-    if (nodeKey.charAt(nodeKey.length - 1) !== path.sep) {
-      nodeKey += path.sep
+  getFolderContents (folder) {
+    const contents = []
+    if (!folder || typeof folder !== 'string') {
+      return contents
     }
-    if (fileInfo.fileName === path.sep) {
-      fileInfo.fileName = nodeKey
-    } else {
-      nodeKey += fileInfo.fileName
-    }
-    // get file mime type
-    const mimeType = mime.lookup(nodeKey)
-    // create object
-    return {
-      id: nodeKey,
-      name: fileInfo.fileName,
-      label: fileInfo.fileName,
-      nodeKey: nodeKey,
-      expandable: fileInfo.isDir,
-      tickable: true,
-      lazy: true,
-      children: [],
-      data: {
-        rootDir: fileInfo.rootDir,
-        isDir: fileInfo.isDir,
-        mimeType: mimeType,
-        stat: fileInfo.stat
+    let newFolders = []
+    let newFiles = []
+    for (const fileInfo of fnWalkFolders(folder, 0)) {
+      if ('error' in fileInfo) {
+        // console.error(`Error: ${fileInfo.rootDir} - ${fileInfo.error}`)
+        continue
       }
+      const node = fnCreateNode(fileInfo)
+      if (node.data.isDir) newFolders.push(node)
+      if (!node.data.isDir) newFiles.push(node)
     }
+    newFolders = _.orderBy(newFolders, ['label'], ['asc'])
+    newFiles = _.orderBy(newFiles, ['label'], ['asc'])
+    contents.push(...newFolders, ...newFiles)
+    return contents
   }
 }
 
-// import walkFolders from './util/walkFolders'
-// import getWindowsDrives from './util/getWindowsDrives'
-
-// const fs = require('fs')
-// const path = require('path')
-
-// console.log(walkFolders)
-// console.log(getWindowsDrives)
-
-// const platform = 'win32'
-// // const drive = 'C:'
-// const drives_ = []
-
-// function getWindowsDrives_ () {
-//   getWindowsDrives(platform, (error, drives) => {
-//     console.log('drives : ', drives)
-//     if (!error) {
-//       drives_ = drives
-//       // work through the drives backwards
-//       for (let index = drives_.length - 1; index >= 0; --index) {
-//         try {
-//           const stat = fs.statSync(drives_[index] + path.sep)
-//           const fileInfo = {}
-//           fileInfo.rootDir = drives_[index]
-//           fileInfo.fileName = path.sep
-//           fileInfo.isDir = stat.isDirectory()
-//           fileInfo.stat = stat
-//         } catch (error) {
-//           // remove from (bad/phantom) drive list
-//           drives_.splice(index, 1)
-//           console.error(error)
-//         }
-//       }
-//     }
-//   })
-// }
-
-// getWindowsDrives_()
-
-// console.log('drives_ : ', drives_)
-
-module.exports = IpcRegister
+export default IpcRegister
