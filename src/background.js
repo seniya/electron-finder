@@ -26,7 +26,7 @@ function createWindow () {
     // if (!process.env.IS_TEST) win.webContents.openDevTools()
   } else {
     createProtocol('app')
-    win.webContents.openDevTools()
+    // win.webContents.openDevTools()
     win.loadURL('app://./index.html')
   }
 
